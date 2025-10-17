@@ -1,114 +1,594 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>The Last Signal - 3D Safe</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ANALOG HORROR — Tape 01</title>
 <style>
-body, html { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#0a0a0a; font-family: monospace; color:#00ff00; }
-#scanlines { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; background: repeating-linear-gradient(rgba(0,255,0,0.03) 0 1px, transparent 1px 2px); z-index:4; }
-#message { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:24px; text-align:center; display:none; }
-canvas{display:block;}
+  :root{
+    --bg:#050405;
+    --accent:#9ae6b4;
+    --vhs-green: #8ff7a6;
+  }
+  html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+  body{
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, #000 60%);
+    color:#e6e6e6;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  /* Stage */
+  #game {
+    width: 1000px;
+    max-width: 96vw;
+    height: 600px;
+    max-height: 86vh;
+    background: linear-gradient(#0b0b0b, #050405 60%);
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.9);
+    position:relative;
+    overflow:hidden;
+  }
+
+  /* main canvas where visuals happen */
+  #screen {
+    position:absolute; inset:20px 20px 80px 20px;
+    background: #000;
+    border-radius:6px;
+    overflow:hidden;
+  }
+
+  /* overlay UI (tape controls, logs) */
+  #ui {
+    position:absolute; left:20px; right:20px; bottom:20px; height:60px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    filter: drop-shadow(0 6px 12px rgba(0,0,0,.6));
+  }
+
+  .controls {
+    display:flex; gap:8px; align-items:center;
+    background:rgba(0,0,0,0.45); padding:8px 12px; border-radius:8px;
+    border:1px solid rgba(255,255,255,0.04);
+    backdrop-filter: blur(2px);
+  }
+
+  button {
+    background:transparent; color:var(--vhs-green); border:1px solid rgba(143,247,166,.08);
+    padding:8px 12px; border-radius:6px; cursor:pointer;
+    font-weight:600; font-size:13px;
+  }
+  button:active{ transform:translateY(1px) }
+
+  .meter{
+    width: 260px; height:10px; background:rgba(255,255,255,0.03); border-radius:6px; overflow:hidden;
+    display:inline-block; vertical-align:middle;
+  }
+  .meter > i{
+    display:block; height:100%; width:0%; background: linear-gradient(90deg,#8ff7a6,#20c997);
+  }
+
+  /* HUD text for "found footage" look */
+  #hud {
+    position:absolute; left:30px; top:30px; font-family:monospace; font-size:13px;
+    color: #94ffb0; text-shadow:0 2px 8px rgba(0,0,0,.9);
+    letter-spacing:.6px;
+  }
+
+  /* subtitles */
+  #sub {
+    position:absolute; left:20%; right:20%; bottom:120px; text-align:center; font-family:monospace;
+    color:#dfe; font-size:16px; background:rgba(0,0,0,0.45); padding:10px 14px; border-radius:6px;
+    border:1px solid rgba(255,255,255,0.03);
+  }
+
+  /* scanlines + vignette */
+  .scanlines {
+    pointer-events:none;
+    position:absolute; inset:0;
+    background-image: linear-gradient(rgba(0,0,0,0.03) 50%, rgba(255,255,255,0.02) 51%);
+    background-size: 100% 4px;
+    mix-blend-mode: overlay;
+    opacity:0.85;
+  }
+  .vignette { position:absolute; inset:0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%); pointer-events:none;}
+
+  /* small green timestamp in corner */
+  #timestamp{ position:absolute; right:18px; top:18px; font-family:monospace; color:#58ff7a; font-size:12px; opacity:0.9; text-shadow:0 1px 2px rgba(0,0,0,.9); }
+
+  /* static overlay (canvas) */
+  #staticCanvas{ position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen; opacity:0.45; }
+
+  /* interactive hotspots (invisible but highlighted when debug true) */
+  .hotspot{ position:absolute; border-radius:6px; cursor:pointer; }
+  .hotspot.debug{ outline: 2px dashed rgba(200,200,200,0.12); }
+
+  /* glitch elements for jump-scare */
+  .glitch {
+    position:absolute; inset:0; pointer-events:none;
+    mix-blend-mode:screen; opacity:0;
+    transition:opacity .05s linear;
+  }
+
+  /* small "tape progress" text */
+  #tapeState{ font-family:monospace; font-size:12px; color:#bfffcf; padding-left:8px; }
+
+  /* tiny help */
+  #help { position:absolute; left:18px; bottom:86px; font-size:12px; font-family:monospace; color:#9ef2a8; opacity:0.85; }
+
+  /* responsive */
+  @media (max-width:760px){
+    #game{ height:76vh; }
+    #sub{ font-size:14px; bottom:110px; left:12%; right:12%; }
+  }
 </style>
 </head>
 <body>
-<div id="scanlines"></div>
-<div id="message"></div>
+<div id="game" role="application" aria-label="Analog horror game">
+  <div id="screen">
+    <canvas id="mainCanvas"></canvas>
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
+    <div id="hud">CHANNEL: ANOMALY 01</div>
+    <div id="timestamp">00:00:00</div>
+    <div id="sub">[TAPE 01 — PLAYBACK]</div>
+
+    <!-- hotspots -->
+    <div id="hot1" class="hotspot" style="left:12%; top:25%; width:14%; height:28%" title="Door"></div>
+    <div id="hot2" class="hotspot" style="left:52%; top:32%; width:20%; height:34%" title="TV"></div>
+    <div id="hot3" class="hotspot" style="left:28%; top:62%; width:36%; height:26%" title="Desk"></div>
+
+    <!-- static canvas -->
+    <canvas id="staticCanvas"></canvas>
+
+    <div id="glitchImg" class="glitch"></div>
+  </div>
+
+  <div id="ui">
+    <div class="controls">
+      <button id="playBtn">PLAY</button>
+      <button id="pauseBtn">PAUSE</button>
+      <button id="rewBtn">REWIND</button>
+      <div class="meter" title="tape position"><i id="meterBar"></i></div>
+      <div id="tapeState">00:00 / 02:00</div>
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:center;">
+      <div id="help">Click hotspots. Hold REW to rewind tape.</div>
+      <div style="background:rgba(0,0,0,0.45); padding:8px 10px; border-radius:6px; font-family:monospace; font-size:12px;">VHS MODE</div>
+    </div>
+  </div>
+</div>
+
 <script>
-// ===== Scene =====
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0a0a);
+/* ----------------------------
+   Analog Horror — browser game
+   Single-file, no assets required
+   ---------------------------- */
 
-// ===== Camera =====
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-camera.position.set(0,1.6,5);
+const canvas = document.getElementById('mainCanvas');
+const staticCanvas = document.getElementById('staticCanvas');
+const ctx = canvas.getContext('2d');
+const sctx = staticCanvas.getContext('2d');
+const timestampEl = document.getElementById('timestamp');
+const subEl = document.getElementById('sub');
+const meterBar = document.getElementById('meterBar');
+const tapeState = document.getElementById('tapeState');
+const playBtn = document.getElementById('playBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const rewBtn = document.getElementById('rewBtn');
+const hot1 = document.getElementById('hot1');
+const hot2 = document.getElementById('hot2');
+const hot3 = document.getElementById('hot3');
+const glitchEl = document.getElementById('glitchImg');
 
-// ===== Renderer =====
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// ===== Lighting =====
-scene.add(new THREE.AmbientLight(0x00ff00,0.3));
-const pointLight = new THREE.PointLight(0x00ff00,0.7,50);
-pointLight.position.set(0,5,0);
-scene.add(pointLight);
-
-// ===== Floor & Walls =====
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(50,50), new THREE.MeshStandardMaterial({color:0x0a0a0a}));
-floor.rotation.x = -Math.PI/2; scene.add(floor);
-
-const wallMat = new THREE.MeshStandardMaterial({color:0x001100});
-scene.add(new THREE.Mesh(new THREE.BoxGeometry(50,10,1), wallMat).position.set(0,5,-25));
-scene.add(new THREE.Mesh(new THREE.BoxGeometry(50,10,1), wallMat).position.set(0,5,25));
-scene.add(new THREE.Mesh(new THREE.BoxGeometry(1,10,50), wallMat).position.set(-25,5,0));
-scene.add(new THREE.Mesh(new THREE.BoxGeometry(1,10,50), wallMat).position.set(25,5,0));
-
-// ===== Ghost =====
-const ghost = new THREE.Mesh(new THREE.SphereGeometry(0.5,16,16), new THREE.MeshStandardMaterial({color:0xff0000, emissive:0xff0000}));
-ghost.position.set(5,0.5,5); scene.add(ghost);
-
-// ===== Clue =====
-const clue = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), new THREE.MeshStandardMaterial({color:0x00ff80}));
-clue.position.set(-5,0.25,-5); scene.add(clue);
-let clueCollected = false;
-
-// ===== DOM message =====
-const messageDiv = document.getElementById('message');
-
-// ===== Movement =====
-const move = {forward:false, back:false, left:false, right:false};
-document.addEventListener('keydown', e=>{
-    if(e.key==='w') move.forward=true;
-    if(e.key==='s') move.back=true;
-    if(e.key==='a') move.left=true;
-    if(e.key==='d') move.right=true;
-});
-document.addEventListener('keyup', e=>{
-    if(e.key==='w') move.forward=false;
-    if(e.key==='s') move.back=false;
-    if(e.key==='a') move.left=false;
-    if(e.key==='d') move.right=false;
-});
-
-// ===== Animate =====
-const velocity = 0.1;
-function animate(){
-    requestAnimationFrame(animate);
-
-    // Move player
-    if(move.forward) camera.position.z -= velocity;
-    if(move.back) camera.position.z += velocity;
-    if(move.left) camera.position.x -= velocity;
-    if(move.right) camera.position.x += velocity;
-
-    // Ghost random movement
-    ghost.position.x += (Math.random()-0.5)*0.05;
-    ghost.position.z += (Math.random()-0.5)*0.05;
-
-    // Collision
-    if(ghost.position.distanceTo(camera.position) < 1 && messageDiv.style.display === 'none'){
-        messageDiv.innerText = "Caught by ghost!";
-        messageDiv.style.display = 'block';
-    }
-    if(!clueCollected && clue.position.distanceTo(camera.position) < 1){
-        clueCollected = true;
-        scene.remove(clue);
-        messageDiv.innerText = "Clue collected! Case solved!";
-        messageDiv.style.display = 'block';
-    }
-
-    renderer.render(scene,camera);
+let W=0,H=0;
+function resize(){
+  W = canvas.width = staticCanvas.width = Math.floor(document.getElementById('screen').clientWidth);
+  H = canvas.height = staticCanvas.height = Math.floor(document.getElementById('screen').clientHeight);
 }
-animate();
+window.addEventListener('resize', resize);
+resize();
 
-// ===== Resize =====
-window.addEventListener('resize', ()=>{
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+/* -------------------------
+   Tape / playback variables
+   ------------------------- */
+const tapeLength = 120; // seconds (2 minutes)
+let tapeTime = 0;       // current play position (seconds)
+let playing = false;
+let rewinding = false;
+let lastTick = performance.now();
+let debugHotspots = false; // set true to see them (debug)
+
+/* scenes are events that happen at specific times */
+const scenes = [
+  { t:0, type:'text', text:'[BEGIN TRANSCRIPT — ANOMALY 01]', duration:4},
+  { t:4, type:'text', text:'— SIGNAL UNSTABLE —', duration:3},
+  { t:8, type:'scene', id:'lobby' },
+  { t:22, type:'scene', id:'tvroom' },
+  { t:45, type:'text', text:'[UNIDENTIFIED BROADCAST]', duration:4},
+  { t:52, type:'scene', id:'desk' },
+  { t:75, type:'event', name:'whisper', prob:0.6 },
+  { t:95, type:'text', text:'[TAPE CORRUPTION DETECTED]', duration:3 },
+  { t:105, type:'event', name:'prepare-jumpscare' },
+  { t:112, type:'jumpscare' },
+  { t:115, type:'text', text:'[END OF TAPE]', duration:5 }
+];
+
+/* hotspot actions */
+hot1.addEventListener('click', ()=>inspect('Door', 'an old metal door, warped. A faint scraping behind it.'));
+hot2.addEventListener('click', ()=>inspect('TV', 'A cracked CRT. The channel flickers and shows a face that\'s not entirely human.'));
+hot3.addEventListener('click', ()=>inspect('Desk', 'Scattered papers. One page has a bold stamped header: DO NOT TRANSMIT.'));
+
+function inspect(title, text){
+  // show a short popup style subtitle with the text and slightly corrupt the signal
+  subEl.textContent = `[${title}] — ${text}`;
+  subEl.style.opacity = 1;
+  subEl.style.transition = 'opacity .2s';
+  setTimeout(()=> subEl.style.opacity = 0, 4200);
+  // add a little glitch flash
+  triggerGlitch(120);
+  // small chance to cause stray whisper
+  if(Math.random() < 0.35) playWhisper();
+}
+
+/* -------------------------
+   Visual: draw procedurals
+   ------------------------- */
+function drawScene(t){
+  // base: slowly shifting gradient for "room"
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  const o = Math.sin(t*0.05)*0.05 + 0.5;
+  g.addColorStop(0, `rgba(${5+o*8},${5+o*6},${8+o*3},1)`);
+  g.addColorStop(1, `rgba(0,0,0,1)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  // draw "monitor" rectangles that act like rooms/content
+  // Lobby / TV / desk boxes depend on tapeTime to be more/less noisy
+  drawBox(80, 50, 320, 420, 'LOBBY', t*0.2);
+  drawBox(430, 90, 440, 260, 'TV: CHANNEL 5', t*0.8);
+  drawBox(240, 360, 460, 180, 'DESK', t*0.15);
+
+  // overlay subtle film grain
+  filmGrain(ctx, W, H, t);
+
+  // small scanline shift to emulate vertical wobble
+  ctx.save();
+  const wobble = Math.sin(t*0.7)*4;
+  ctx.translate(wobble, 0);
+  // border
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(2,2,W-4,H-4);
+  ctx.restore();
+}
+
+// draw a content box with procedural TV-like noise
+function drawBox(x,y,w,h,label,seed){
+  // box background
+  ctx.save();
+  // slight shading
+  const bg = ctx.createLinearGradient(x,y,x+w,y+h);
+  bg.addColorStop(0,'rgba(20,20,24,0.92)');
+  bg.addColorStop(1,'rgba(4,4,6,0.85)');
+  ctx.fillStyle = bg;
+  roundRect(ctx, x, y, w, h, 6, true, false);
+
+  // internal "screen" area where we draw noise / image
+  const sx = x+8, sy=y+8, sw=w-16, sh=h-26;
+  const imgData = ctx.createImageData(sw, sh);
+  // generate luma noise
+  for(let i=0;i<sw*sh;i++){
+    const v = 50 + Math.floor(80 * Math.abs(Math.sin(seed*2 + i*0.0009)));
+    imgData.data[i*4+0] = v + (Math.random()*50-25);
+    imgData.data[i*4+1] = v + (Math.random()*50-25);
+    imgData.data[i*4+2] = v + (Math.random()*50-25);
+    imgData.data[i*4+3] = 255;
+  }
+  // create offscreen canvas for image smoothing
+  const off = document.createElement('canvas');
+  off.width = sw; off.height = sh;
+  off.getContext('2d').putImageData(imgData, 0, 0);
+
+  // occasionally overlay a "face" or text on the tv box when tapeTime in certain range
+  ctx.globalAlpha = 0.9;
+  ctx.drawImage(off, sx, sy);
+  if(Math.random() < 0.002) ctx.globalAlpha = 0.06; // occasional flicker
+
+  // label
+  ctx.globalAlpha = 1;
+  ctx.font = '12px monospace';
+  ctx.fillStyle = '#8ff7a6';
+  ctx.fillText(label, x+10, y+h-8);
+
+  ctx.restore();
+}
+
+function filmGrain(ctx, W, H, t){
+  const density = 0.0017 * (1 + Math.abs(Math.sin(t*0.2)));
+  const pixels = W*H*density;
+  for(let i=0;i<Math.min(1200, Math.floor(pixels)); i++){
+    const x = Math.random()*W|0;
+    const y = Math.random()*H|0;
+    ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.04})`;
+    ctx.fillRect(x,y,1,1);
+  }
+}
+
+/* helpers */
+function roundRect(ctx,x,y,w,h,r, fill, stroke){
+  if (typeof r === 'undefined') r = 5;
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+  if(fill) ctx.fill();
+  if(stroke) ctx.stroke();
+}
+
+/* -------------------------
+   Static / noise canvas
+   ------------------------- */
+function drawStatic(t){
+  const img = sctx.createImageData(W, H);
+  for (let i = 0; i < W * H; i++) {
+    const v = Math.random() * 255;
+    img.data[i * 4 + 0] = v;
+    img.data[i * 4 + 1] = v;
+    img.data[i * 4 + 2] = v * (Math.random()*0.6 + 0.4);
+    img.data[i * 4 + 3] = 120 + Math.random()*80 * (Math.sin(t*5)+1)/2;
+  }
+  sctx.putImageData(img, 0, 0);
+}
+
+/* -------------------------
+   Audio: ambient hum + whisper + glitches
+   ------------------------- */
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+let humOsc, humGain, noiseNode;
+
+function startAudio(){
+  if(audioCtx) return;
+  audioCtx = new AudioCtx();
+  humOsc = audioCtx.createOscillator();
+  humGain = audioCtx.createGain();
+  humOsc.type = 'sine';
+  humOsc.frequency.value = 60; // low hum
+  humGain.gain.value = 0.02;
+  humOsc.connect(humGain);
+  humGain.connect(audioCtx.destination);
+
+  // white noise node
+  const bufferSize = 2 * audioCtx.sampleRate;
+  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const output = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+  noiseNode = audioCtx.createBufferSource();
+  noiseNode.buffer = noiseBuffer;
+  noiseNode.loop = true;
+  const noiseGain = audioCtx.createGain();
+  noiseGain.gain.value = 0.0; // start muted
+  noiseNode.connect(noiseGain);
+  noiseGain.connect(audioCtx.destination);
+  noiseNode.start(0);
+  humOsc.start();
+  window._noiseGain = noiseGain; // for manipulation
+}
+
+function setNoiseLevel(v){
+  if(window._noiseGain) window._noiseGain.gain.linearRampToValueAtTime(v, audioCtx.currentTime + 0.05);
+}
+
+function playWhisper(){
+  if(!audioCtx) startAudio();
+  const t = audioCtx.currentTime;
+  // create a short whisper using filtered noise burst
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate*0.5, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++){
+    d[i] = (Math.random()*2-1) * Math.exp(-i/5000) * (Math.random()*0.6 + 0.4);
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'bandpass'; f.frequency.value = 900;
+  const g = audioCtx.createGain(); g.gain.value = 0.6;
+  src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+  src.start();
+}
+
+/* jumpscare sound */
+function jumpscareBoom(){
+  if(!audioCtx) startAudio();
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type='sawtooth';
+  o.frequency.setValueAtTime(80, audioCtx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(1500, audioCtx.currentTime + 0.12);
+  g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.5, audioCtx.currentTime + 0.07);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start();
+  o.stop(audioCtx.currentTime + 1.1);
+}
+
+/* -------------------------
+   Glitch visual effect
+   ------------------------- */
+let glitchTimeout = 0;
+function triggerGlitch(ms=200){
+  glitchEl.style.opacity = 1;
+  glitchEl.innerHTML = '';
+  // generate several shifted stripes (procedural)
+  const frag = document.createElement('div');
+  frag.style.position='absolute'; frag.style.inset='0';
+  const strips = 6;
+  for(let i=0;i<strips;i++){
+    const s = document.createElement('div');
+    const h = Math.random()*30 + 8;
+    s.style.position='absolute';
+    s.style.left = Math.random()*6 + '%';
+    s.style.top = (i*(100/strips)) + '%';
+    s.style.width = (80 + Math.random()*30) + '%';
+    s.style.height = h+'px';
+    s.style.transform = `translateX(${(Math.random()*20-10)}px) skewX(${Math.random()*8-4}deg)`;
+    s.style.background = 'linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))';
+    frag.appendChild(s);
+  }
+  glitchEl.appendChild(frag);
+  setTimeout(()=> glitchEl.style.opacity = 0, ms);
+}
+
+/* -------------------------
+   Tape / main loop
+   ------------------------- */
+function updateMeter(){
+  const pct = Math.min(1, Math.max(0, tapeTime / tapeLength));
+  meterBar.style.width = (pct*100)+'%';
+  // time text
+  function fmt(s){ const mm = Math.floor(s/60)|0; const ss = Math.floor(s%60)|0; return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; }
+  tapeState.textContent = `${fmt(tapeTime)} / ${fmt(tapeLength)}`;
+  // timestamp fake: just show tape position as hh:mm:ss
+  timestampEl.textContent = `00:${fmt(tapeTime)}`;
+}
+
+function mainLoop(now){
+  const dt = (now - lastTick)/1000;
+  lastTick = now;
+
+  // update tape time
+  if(playing && !rewinding){
+    tapeTime += dt;
+    if(tapeTime > tapeLength) { tapeTime = tapeLength; playing = false; }
+  }
+  if(rewinding){
+    tapeTime -= dt*3; // rewind 3x speed
+    if(tapeTime <= 0){ tapeTime = 0; rewinding = false; playing = false; }
+  }
+
+  // update ambient audio noise according to play / corruption
+  if(audioCtx) setNoiseLevel(playing ? 0.03 : 0.01);
+
+  // draw visual frame
+  drawScene(now/1000);
+  drawStatic(now/1000);
+
+  // occasionally trigger small random glitches when in specific time ranges
+  for(const s of scenes){
+    if(s.t < tapeTime && tapeTime < s.t + (s.duration || 2)){
+      // render scene text when active
+      if(s.type === 'text') {
+        subEl.textContent = s.text;
+      }
+      if(s.type === 'jumpscare' && tapeTime > s.t && tapeTime < s.t + 0.5) {
+        // immediate jump
+        doJumpscare();
+      }
+      if(s.type === 'event' && s.name === 'whisper' && Math.random() < 0.02){
+        playWhisper();
+      }
+    }
+  }
+
+  // faint automatic glitch if near end
+  if(tapeTime > tapeLength - 20 && Math.random() < 0.02) triggerGlitch(190);
+
+  updateMeter();
+  requestAnimationFrame(mainLoop);
+}
+
+/* -------------------------
+   Jumpscare implementation
+   ------------------------- */
+let jumpscarePlayed = false;
+function doJumpscare(){
+  if(jumpscarePlayed) return;
+  jumpscarePlayed = true;
+  // visuals: full screen white flash, large corrupted face (svg-ish)
+  const flash = document.createElement('div');
+  flash.style.position='absolute'; flash.style.inset='0'; flash.style.background='white'; flash.style.opacity='0';
+  flash.style.pointerEvents='none';
+  document.getElementById('screen').appendChild(flash);
+  flash.style.transition = 'opacity .06s linear';
+  setTimeout(()=> flash.style.opacity = '1', 10);
+  setTimeout(()=> flash.style.opacity = '0', 100);
+  setTimeout(()=> flash.remove(), 500);
+
+  // overlay a monstrous face inside glitchEl
+  glitchEl.innerHTML = '';
+  const face = document.createElement('div');
+  face.style.position='absolute'; face.style.inset='35% 25% 35% 25%'; face.style.background='radial-gradient(circle at 40% 40%, rgba(255,255,255,0.95), rgba(200,200,200,0.05))';
+  face.style.filter = 'contrast(180%) saturate(10%) blur(2px)';
+  face.style.transform = 'scale(1.3)';
+  glitchEl.appendChild(face);
+  glitchEl.style.opacity = 1;
+  triggerGlitch(700);
+  jumpscareBoom();
+
+  // aftershock: distort screen heavily then show "END"
+  setTimeout(()=>{
+    subEl.textContent = '[DATA CORRUPTION — TAPE TERMINATED]';
+    subEl.style.opacity = 1;
+  }, 900);
+}
+
+/* -------------------------
+   Controls
+   ------------------------- */
+playBtn.addEventListener('click', ()=>{
+  if(!audioCtx) startAudio();
+  playing = true; rewinding = false;
+});
+pauseBtn.addEventListener('click', ()=>{ playing = false; rewinding = false; });
+rewBtn.addEventListener('mousedown', ()=>{ rewinding = true; playing = false; });
+rewBtn.addEventListener('mouseup', ()=>{ rewinding = false; });
+
+/* also support keyboard: Space play/pause, R hold to rewind */
+window.addEventListener('keydown', (e)=>{
+  if(e.code === 'Space'){ e.preventDefault(); playing = !playing; rewinding = false; }
+  if(e.key.toLowerCase() === 'r'){ rewinding = true; playing = false; }
+});
+window.addEventListener('keyup', (e)=>{
+  if(e.key.toLowerCase() === 'r'){ rewinding = false; }
+});
+
+/* -------------------------
+   Start audio + loop
+   ------------------------- */
+startAudio();
+lastTick = performance.now();
+requestAnimationFrame(mainLoop);
+
+/* small helper function: occasional whisper scheduled randomly */
+function scheduleRandomWhispers(){
+  setInterval(()=>{
+    if(playing && Math.random() < 0.08) playWhisper();
+  }, 4000);
+}
+scheduleRandomWhispers();
+
+/* small debug: show hotspot outlines if debugHotspots true */
+if(debugHotspots){
+  document.querySelectorAll('.hotspot').forEach(h=>h.classList.add('debug'));
+}
+
+/* Accessibility: focus outlines for keyboard users */
+document.querySelectorAll('button').forEach(b=>{
+  b.addEventListener('focus', ()=> b.style.outline='2px solid rgba(160,255,170,0.12)');
+  b.addEventListener('blur', ()=> b.style.outline='none');
 });
 </script>
 </body>
