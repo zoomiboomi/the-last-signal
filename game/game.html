@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>ANALOG HORROR — Tape 01</title>
+<title>ANALOG HORROR — Tape 01 (Enhanced)</title>
 <style>
   :root{
     --bg:#050405;
-    --accent:#9ae6b4;
-    --vhs-green: #8ff7a6;
+    --vhs-green:#8ff7a6;
+    --glass: rgba(255,255,255,0.03);
   }
   html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
   body{
-    background: radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, #000 60%);
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, #000 60%);
     color:#e6e6e6;
     overflow:hidden;
     display:flex;
@@ -20,307 +20,620 @@
     justify-content:center;
   }
 
-  /* Stage */
+  /* Main container */
   #game {
-    width: 1000px;
+    width: 1100px;
     max-width: 96vw;
-    height: 600px;
-    max-height: 86vh;
+    height: 680px;
+    max-height: 90vh;
     background: linear-gradient(#0b0b0b, #050405 60%);
-    border-radius: 10px;
-    box-shadow: 0 20px 60px rgba(0,0,0,.9);
+    border-radius: 12px;
+    box-shadow: 0 26px 80px rgba(0,0,0,.9);
     position:relative;
     overflow:hidden;
+    display:flex;
+    gap:12px;
+    padding:18px;
+    box-sizing:border-box;
   }
 
-  /* main canvas where visuals happen */
-  #screen {
-    position:absolute; inset:20px 20px 80px 20px;
-    background: #000;
-    border-radius:6px;
+  /* Left - screen */
+  #stage {
+    flex: 1 1 720px;
+    min-width: 560px;
+    height:100%;
+    position:relative;
+    border-radius:8px;
     overflow:hidden;
+    background: #000;
+  }
+  canvas { display:block; width:100%; height:100%; }
+
+  /* overlays for CRT and static */
+  .scanlines { pointer-events:none; position:absolute; inset:0; mix-blend-mode:overlay; opacity:0.9; background-image: linear-gradient(rgba(0,0,0,0.06) 50%, rgba(255,255,255,0.01) 51%); background-size:100% 3px;}
+  .vignette { position:absolute; inset:0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 42%, rgba(0,0,0,0.7) 100%); pointer-events:none; }
+  .crt-scan { position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen; opacity:0.22; }
+
+  /* HUD on stage */
+  #hudTop { position:absolute; left:18px; top:14px; font-family:monospace; font-size:12px; color:var(--vhs-green); text-shadow:0 1px 2px rgba(0,0,0,.9); display:flex; gap:8px; align-items:center; z-index:60; }
+  #sub { position:absolute; left:10%; right:10%; bottom:140px; text-align:center; font-family:monospace; color:#e6fbe9; font-size:15px; background:rgba(0,0,0,0.5); padding:10px 14px; border-radius:6px; border:1px solid rgba(255,255,255,0.03); z-index:60; }
+  #timestamp { position:absolute; right:18px; top:14px; font-family:monospace; color:#6eff8a; font-size:12px; z-index:60; }
+
+  /* hotspots (invisible unless debug or inspected) */
+  .hotspot { position:absolute; border-radius:6px; cursor:pointer; z-index:55; }
+  .hotspot.debug { outline:2px dashed rgba(200,200,200,0.12); pointer-events:auto; }
+
+  /* Right panel - inventory/log & controls */
+  #side {
+    width:330px;
+    min-width:250px;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
   }
 
-  /* overlay UI (tape controls, logs) */
-  #ui {
-    position:absolute; left:20px; right:20px; bottom:20px; height:60px;
-    display:flex; align-items:center; justify-content:space-between; gap:12px;
-    filter: drop-shadow(0 6px 12px rgba(0,0,0,.6));
-  }
-
-  .controls {
-    display:flex; gap:8px; align-items:center;
-    background:rgba(0,0,0,0.45); padding:8px 12px; border-radius:8px;
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:10px;
+    padding:12px;
     border:1px solid rgba(255,255,255,0.04);
-    backdrop-filter: blur(2px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.6);
   }
 
-  button {
-    background:transparent; color:var(--vhs-green); border:1px solid rgba(143,247,166,.08);
-    padding:8px 12px; border-radius:6px; cursor:pointer;
-    font-weight:600; font-size:13px;
-  }
-  button:active{ transform:translateY(1px) }
+  #log { flex:1 1 auto; overflow:auto; font-family:monospace; font-size:13px; color:#dfe; }
+  .log-entry { padding:6px 6px; border-bottom:1px solid rgba(255,255,255,0.02); }
+  #inventory { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
 
-  .meter{
-    width: 260px; height:10px; background:rgba(255,255,255,0.03); border-radius:6px; overflow:hidden;
-    display:inline-block; vertical-align:middle;
-  }
-  .meter > i{
-    display:block; height:100%; width:0%; background: linear-gradient(90deg,#8ff7a6,#20c997);
-  }
-
-  /* HUD text for "found footage" look */
-  #hud {
-    position:absolute; left:30px; top:30px; font-family:monospace; font-size:13px;
-    color: #94ffb0; text-shadow:0 2px 8px rgba(0,0,0,.9);
-    letter-spacing:.6px;
-  }
-
-  /* subtitles */
-  #sub {
-    position:absolute; left:20%; right:20%; bottom:120px; text-align:center; font-family:monospace;
-    color:#dfe; font-size:16px; background:rgba(0,0,0,0.45); padding:10px 14px; border-radius:6px;
+  .item {
+    background: rgba(0,0,0,0.4);
+    border-radius:6px; padding:6px 8px; font-family:monospace; font-size:13px; color:#cfeecd;
     border:1px solid rgba(255,255,255,0.03);
   }
 
-  /* scanlines + vignette */
-  .scanlines {
-    pointer-events:none;
-    position:absolute; inset:0;
-    background-image: linear-gradient(rgba(0,0,0,0.03) 50%, rgba(255,255,255,0.02) 51%);
-    background-size: 100% 4px;
-    mix-blend-mode: overlay;
-    opacity:0.85;
-  }
-  .vignette { position:absolute; inset:0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%); pointer-events:none;}
-
-  /* small green timestamp in corner */
-  #timestamp{ position:absolute; right:18px; top:18px; font-family:monospace; color:#58ff7a; font-size:12px; opacity:0.9; text-shadow:0 1px 2px rgba(0,0,0,.9); }
-
-  /* static overlay (canvas) */
-  #staticCanvas{ position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen; opacity:0.45; }
-
-  /* interactive hotspots (invisible but highlighted when debug true) */
-  .hotspot{ position:absolute; border-radius:6px; cursor:pointer; }
-  .hotspot.debug{ outline: 2px dashed rgba(200,200,200,0.12); }
-
-  /* glitch elements for jump-scare */
-  .glitch {
-    position:absolute; inset:0; pointer-events:none;
-    mix-blend-mode:screen; opacity:0;
-    transition:opacity .05s linear;
+  /* controls card */
+  #controls { display:flex; flex-direction:column; gap:8px; }
+  .control-row { display:flex; gap:8px; align-items:center; }
+  .btn {
+    background:transparent; color:var(--vhs-green); border:1px solid rgba(143,247,166,0.08);
+    padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px; min-width:74px;
   }
 
-  /* small "tape progress" text */
-  #tapeState{ font-family:monospace; font-size:12px; color:#bfffcf; padding-left:8px; }
+  .meter { flex:1; height:12px; background:rgba(255,255,255,0.03); border-radius:8px; overflow:hidden; position:relative; }
+  .meter > i { display:block; height:100%; width:0%; background: linear-gradient(90deg,#8ff7a6,#20c997); transition:width 120ms linear; }
 
-  /* tiny help */
-  #help { position:absolute; left:18px; bottom:86px; font-size:12px; font-family:monospace; color:#9ef2a8; opacity:0.85; }
+  #tapeTime { font-family:monospace; font-size:12px; color:#bfffcf; }
+
+  /* small puzzle UI */
+  #puzzle { margin-top:8px; display:flex; gap:6px; align-items:center; }
+  #puzzle input { width:54px; font-family:monospace; font-size:16px; padding:8px; border-radius:6px; background:rgba(0,0,0,0.45); border:1px solid rgba(255,255,255,0.03); color:#e6fbe9; text-align:center; }
 
   /* responsive */
-  @media (max-width:760px){
-    #game{ height:76vh; }
-    #sub{ font-size:14px; bottom:110px; left:12%; right:12%; }
+  @media (max-width:1100px){
+    #game{ flex-direction:column; height:86vh; width:96vw; padding:12px; }
+    #stage{ min-width:0; height:58%; }
+    #side{ width:100%; height:40%; display:block; overflow:auto; }
   }
 </style>
 </head>
 <body>
-<div id="game" role="application" aria-label="Analog horror game">
-  <div id="screen">
-    <canvas id="mainCanvas"></canvas>
+<div id="game" role="application" aria-label="Analog horror enhanced">
+  <div id="stage" aria-hidden="false">
+    <canvas id="main"></canvas>
+    <canvas id="post" class="crt-scan"></canvas>
     <div class="scanlines"></div>
     <div class="vignette"></div>
 
-    <div id="hud">CHANNEL: ANOMALY 01</div>
-    <div id="timestamp">00:00:00</div>
+    <div id="hudTop"><div id="channel">CHANNEL: ANOMALY 01</div><div id="mode" style="opacity:0.85">VHS MODE</div></div>
+    <div id="timestamp">00:00</div>
     <div id="sub">[TAPE 01 — PLAYBACK]</div>
 
-    <!-- hotspots -->
-    <div id="hot1" class="hotspot" style="left:12%; top:25%; width:14%; height:28%" title="Door"></div>
-    <div id="hot2" class="hotspot" style="left:52%; top:32%; width:20%; height:34%" title="TV"></div>
-    <div id="hot3" class="hotspot" style="left:28%; top:62%; width:36%; height:26%" title="Desk"></div>
-
-    <!-- static canvas -->
-    <canvas id="staticCanvas"></canvas>
-
-    <div id="glitchImg" class="glitch"></div>
+    <!-- Hotspots (positions relative to stage) -->
+    <div id="hot-door" class="hotspot" style="left:10%; top:22%; width:16%; height:32%;" title="Door"></div>
+    <div id="hot-tv" class="hotspot" style="left:52%; top:18%; width:26%; height:24%;" title="TV"></div>
+    <div id="hot-desk" class="hotspot" style="left:26%; top:58%; width:36%; height:22%;" title="Desk"></div>
+    <div id="hot-poster" class="hotspot" style="left:78%; top:54%; width:12%; height:20%;" title="Poster"></div>
   </div>
 
-  <div id="ui">
-    <div class="controls">
-      <button id="playBtn">PLAY</button>
-      <button id="pauseBtn">PAUSE</button>
-      <button id="rewBtn">REWIND</button>
-      <div class="meter" title="tape position"><i id="meterBar"></i></div>
-      <div id="tapeState">00:00 / 02:00</div>
+  <div id="side">
+    <div class="card" style="flex:0 0 auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:700">LOG</div>
+        <div style="font-family:monospace; color:#9ef2a8" id="foundCount">0 items</div>
+      </div>
+      <div id="log" aria-live="polite"></div>
     </div>
 
-    <div style="display:flex; gap:10px; align-items:center;">
-      <div id="help">Click hotspots. Hold REW to rewind tape.</div>
-      <div style="background:rgba(0,0,0,0.45); padding:8px 10px; border-radius:6px; font-family:monospace; font-size:12px;">VHS MODE</div>
+    <div class="card" style="flex:0 0 auto;">
+      <div style="font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+        <div>INVENTORY</div>
+        <button class="btn" id="clearBtn" title="Clear saved progress">RESET</button>
+      </div>
+      <div id="inventory" aria-hidden="false"></div>
+    </div>
+
+    <div class="card" id="controls">
+      <div style="font-weight:700">TAPE CONTROLS</div>
+      <div class="control-row">
+        <button class="btn" id="play">PLAY</button>
+        <button class="btn" id="pause">PAUSE</button>
+        <button class="btn" id="rew">REW</button>
+        <button class="btn" id="fwd">FWD</button>
+        <div class="meter" title="tape position"><i id="meterFill"></i></div>
+      </div>
+      <div class="control-row">
+        <div id="tapeTime">00:00 / 02:00</div>
+        <div style="flex:1"></div>
+        <div style="font-family:monospace; font-size:12px; color:#9ef2a8" id="status">PAUSED</div>
+      </div>
+
+      <div style="margin-top:8px; font-weight:700">PUZZLE — ENTER CODE</div>
+      <div id="puzzle">
+        <input id="codeInput" maxlength="3" placeholder="___" aria-label="code input">
+        <button class="btn" id="codeBtn">ENTER</button>
+        <div id="puzzleHint" style="font-family:monospace; font-size:12px; color:#cfeecd">clues appear in log</div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-/* ----------------------------
-   Analog Horror — browser game
-   Single-file, no assets required
-   ---------------------------- */
+/*
+  Enhanced Analog Horror — Single-file
+  - Improved CRT/VHS effects
+  - Inventory / Log (persists to localStorage)
+  - Tape scrubber (draggable)
+  - Puzzle: 3-digit code, uses in-game clues
+  - Modular scene events
+  - Runs locally, no external assets
+*/
 
-const canvas = document.getElementById('mainCanvas');
-const staticCanvas = document.getElementById('staticCanvas');
-const ctx = canvas.getContext('2d');
-const sctx = staticCanvas.getContext('2d');
-const timestampEl = document.getElementById('timestamp');
+/* ---------------------------
+   Utilities & DOM references
+   --------------------------- */
+const main = document.getElementById('main');
+const post = document.getElementById('post');
+const ctx = main.getContext('2d');
+const pctx = post.getContext('2d');
+const stageEl = document.getElementById('stage');
+
 const subEl = document.getElementById('sub');
-const meterBar = document.getElementById('meterBar');
-const tapeState = document.getElementById('tapeState');
-const playBtn = document.getElementById('playBtn');
-const pauseBtn = document.getElementById('pauseBtn');
-const rewBtn = document.getElementById('rewBtn');
-const hot1 = document.getElementById('hot1');
-const hot2 = document.getElementById('hot2');
-const hot3 = document.getElementById('hot3');
-const glitchEl = document.getElementById('glitchImg');
+const tsEl = document.getElementById('timestamp');
+const meterFill = document.getElementById('meterFill');
+const statusEl = document.getElementById('status');
+const logEl = document.getElementById('log');
+const invEl = document.getElementById('inventory');
+const foundCountEl = document.getElementById('foundCount');
 
-let W=0,H=0;
-function resize(){
-  W = canvas.width = staticCanvas.width = Math.floor(document.getElementById('screen').clientWidth);
-  H = canvas.height = staticCanvas.height = Math.floor(document.getElementById('screen').clientHeight);
+const playBtn = document.getElementById('play');
+const pauseBtn = document.getElementById('pause');
+const rewBtn = document.getElementById('rew');
+const fwdBtn = document.getElementById('fwd');
+const clearBtn = document.getElementById('clearBtn');
+const codeInput = document.getElementById('codeInput');
+const codeBtn = document.getElementById('codeBtn');
+
+const hotspots = {
+  door: document.getElementById('hot-door'),
+  tv: document.getElementById('hot-tv'),
+  desk: document.getElementById('hot-desk'),
+  poster: document.getElementById('hot-poster')
+};
+
+/* responsive canvas sizing */
+function resize() {
+  const r = stageEl.getBoundingClientRect();
+  main.width = Math.floor(r.width);
+  main.height = Math.floor(r.height);
+  post.width = main.width;
+  post.height = main.height;
 }
 window.addEventListener('resize', resize);
 resize();
 
-/* -------------------------
-   Tape / playback variables
-   ------------------------- */
-const tapeLength = 120; // seconds (2 minutes)
-let tapeTime = 0;       // current play position (seconds)
+/* ---------------------------
+   Tape & scene config
+   --------------------------- */
+const TAPE_LENGTH = 120; // seconds
+let tapePos = 0;         // seconds
 let playing = false;
-let rewinding = false;
-let lastTick = performance.now();
-let debugHotspots = false; // set true to see them (debug)
+let rew = false, fwd = false;
+let lastTime = performance.now();
+let jumpscareDone = false;
 
-/* scenes are events that happen at specific times */
-const scenes = [
-  { t:0, type:'text', text:'[BEGIN TRANSCRIPT — ANOMALY 01]', duration:4},
-  { t:4, type:'text', text:'— SIGNAL UNSTABLE —', duration:3},
-  { t:8, type:'scene', id:'lobby' },
-  { t:22, type:'scene', id:'tvroom' },
-  { t:45, type:'text', text:'[UNIDENTIFIED BROADCAST]', duration:4},
-  { t:52, type:'scene', id:'desk' },
-  { t:75, type:'event', name:'whisper', prob:0.6 },
-  { t:95, type:'text', text:'[TAPE CORRUPTION DETECTED]', duration:3 },
-  { t:105, type:'event', name:'prepare-jumpscare' },
-  { t:112, type:'jumpscare' },
-  { t:115, type:'text', text:'[END OF TAPE]', duration:5 }
+/* Scenes array: times are seconds from start */
+const SCENES = [
+  {t:0, type:'text', text:'[BEGIN TRANSCRIPT — ANOMALY 01]', dur:4},
+  {t:4, type:'text', text:'— SIGNAL UNSTABLE —', dur:3},
+  {t:9, type:'hint', id:'lobby', text:'THE DOOR MARKS THE NUMBER 4', dur:5},
+  {t:22, type:'hint', id:'tvroom', text:'CHANNEL 5 REPEATS A DIGIT', dur:5},
+  {t:36, type:'scene', id:'tv-face'},
+  {t:44, type:'hint', id:'desk', text:'DESK NOTE: 7 IS A WARNING', dur:6},
+  {t:66, type:'event', name:'whispers', prob:0.7},
+  {t:95, type:'text', text:'[TAPE CORRUPTION DETECTED]', dur:3},
+  {t:104, type:'prepare-jumpscare'},
+  {t:112, type:'jumpscare'} // plays once
 ];
 
-/* hotspot actions */
-hot1.addEventListener('click', ()=>inspect('Door', 'an old metal door, warped. A faint scraping behind it.'));
-hot2.addEventListener('click', ()=>inspect('TV', 'A cracked CRT. The channel flickers and shows a face that\'s not entirely human.'));
-hot3.addEventListener('click', ()=>inspect('Desk', 'Scattered papers. One page has a bold stamped header: DO NOT TRANSMIT.'));
+/* Puzzle code (combine hints to find it) */
+const SECRET_CODE = '457'; // door=4 channel=5 desk=7
 
-function inspect(title, text){
-  // show a short popup style subtitle with the text and slightly corrupt the signal
-  subEl.textContent = `[${title}] — ${text}`;
-  subEl.style.opacity = 1;
-  subEl.style.transition = 'opacity .2s';
-  setTimeout(()=> subEl.style.opacity = 0, 4200);
-  // add a little glitch flash
-  triggerGlitch(120);
-  // small chance to cause stray whisper
-  if(Math.random() < 0.35) playWhisper();
+/* ---------------------------
+   Inventory & Log (persistence)
+   --------------------------- */
+const STORAGE_KEY = 'analog_horror_save_v2';
+let state = {
+  found: [], // items found
+  log: []
+};
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) state = JSON.parse(raw);
+  }catch(e){ console.warn('load failed', e); }
+  renderLog();
+  renderInventory();
+}
+function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+function addLog(text){
+  const timeText = formatTime(Math.floor(tapePos));
+  const entry = {t:tapePos, text, timeText};
+  state.log.unshift(entry); // newest first
+  if(state.log.length > 120) state.log.pop();
+  saveState();
+  renderLog();
+}
+function addItem(id, label){
+  if(state.found.includes(id)) return;
+  state.found.push(id);
+  addLog(`FOUND: ${label}`);
+  saveState();
+  renderInventory();
 }
 
-/* -------------------------
-   Visual: draw procedurals
-   ------------------------- */
-function drawScene(t){
-  // base: slowly shifting gradient for "room"
-  const g = ctx.createLinearGradient(0, 0, W, H);
-  const o = Math.sin(t*0.05)*0.05 + 0.5;
-  g.addColorStop(0, `rgba(${5+o*8},${5+o*6},${8+o*3},1)`);
-  g.addColorStop(1, `rgba(0,0,0,1)`);
+function renderLog(){
+  logEl.innerHTML = '';
+  for(const e of state.log){
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `<div style="font-size:12px;color:#9ef2a8">${e.timeText}</div><div style="margin-top:4px">${escapeHtml(e.text)}</div>`;
+    logEl.appendChild(div);
+  }
+  foundCountEl.textContent = `${state.found.length} items`;
+}
+function renderInventory(){
+  invEl.innerHTML = '';
+  for(const id of state.found){
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.textContent = id;
+    invEl.appendChild(d);
+  }
+}
+
+/* Escape helper */
+function escapeHtml(s){ return String(s).replace(/[&<>"'`=\/]/g, function(c){ return '&#'+c.charCodeAt(0)+';'; }); }
+
+/* Reset progress */
+clearBtn.addEventListener('click', ()=>{
+  if(confirm('Reset saved progress?')) {
+    localStorage.removeItem(STORAGE_KEY);
+    state = {found:[], log:[]};
+    renderInventory(); renderLog();
+    addLog('[PROGRESS RESET]');
+  }
+});
+
+/* ---------------------------
+   Hotspot interactions
+   --------------------------- */
+hotspots.door.addEventListener('click', ()=>{
+  addItem('Door: Metal Plate (4)', 'Door');
+  showTransient(`[DOOR] — A metal plate stamped with "4".`);
+  // small static glitch effect
+  flashGlitch(180);
+});
+hotspots.tv.addEventListener('click', ()=>{
+  addItem('TV: Channel 5 Snip (5)', 'TV');
+  showTransient(`[TV] — A looping channel shows "5" in the corner.`);
+  if(Math.random() < 0.6) playWhisper();
+});
+hotspots.desk.addEventListener('click', ()=>{
+  addItem('Desk: Stamped Paper (7)', 'Desk');
+  showTransient(`[DESK] — A paper reads: DO NOT TRANSMIT — 7 circled in red.`);
+});
+hotspots.poster.addEventListener('click', ()=>{
+  addItem('Poster: Strange Symbol', 'Poster');
+  showTransient(`[POSTER] — A faded poster of CHANNEL: ANOMALY.`);
+});
+
+/* small overlay subtitle for interactions */
+let transientTimeout = 0;
+function showTransient(text, ms=4200){
+  subEl.textContent = text;
+  subEl.style.opacity = 1;
+  clearTimeout(transientTimeout);
+  transientTimeout = setTimeout(()=> subEl.style.opacity = 0, ms);
+}
+
+/* ---------------------------
+   Tape controls + keyboard
+   --------------------------- */
+playBtn.addEventListener('click', ()=>{ play(); });
+pauseBtn.addEventListener('click', ()=>{ pause(); });
+rewBtn.addEventListener('mousedown', ()=> rew=true);
+rewBtn.addEventListener('mouseup', ()=> rew=false);
+fwdBtn.addEventListener('mousedown', ()=> fwd=true);
+fwdBtn.addEventListener('mouseup', ()=> fwd=false);
+window.addEventListener('keydown', (e)=>{
+  if(e.code === 'Space'){ e.preventDefault(); playing ? pause() : play(); }
+  if(e.key.toLowerCase() === 'r') rew=true;
+  if(e.key.toLowerCase() === 'f') fwd=true;
+});
+window.addEventListener('keyup', (e)=>{
+  if(e.key.toLowerCase() === 'r') rew=false;
+  if(e.key.toLowerCase() === 'f') fwd=false;
+});
+function play(){ playing=true; statusEl.textContent='PLAYING'; if(!audioCtx) startAudio(); setNoise(0.035); }
+function pause(){ playing=false; statusEl.textContent='PAUSED'; setNoise(0.01); }
+
+/* tape scrubber (click on meter to seek) */
+document.querySelector('.meter').addEventListener('click', (e)=>{
+  const rect = e.currentTarget.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const pct = Math.max(0, Math.min(1, x / rect.width));
+  tapePos = pct * TAPE_LENGTH;
+  updateTimeUI();
+});
+
+/* puzzle input */
+codeBtn.addEventListener('click', ()=>{
+  const v = (codeInput.value || '').trim();
+  if(v === SECRET_CODE){
+    addLog('[PUZZLE] CODE ACCEPTED — SIGNAL STABILIZES');
+    showTransient('[SYSTEM] CODE ACCEPTED — PLAYBACK RESTORED', 4000);
+    // repair tape a bit: skip to safer scene
+    tapePos = Math.max(0, tapePos - 6);
+    renderLog();
+    play();
+  } else {
+    addLog('[PUZZLE] INVALID CODE');
+    showTransient('[SYSTEM] INVALID', 2000);
+    // small chance to trigger whisper
+    if(Math.random() < 0.4) playWhisper();
+  }
+});
+
+/* ---------------------------
+   Time formatting & meter
+   --------------------------- */
+function formatTime(s){
+  const mm = Math.floor(s/60)|0; const ss = Math.floor(s%60)|0;
+  return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+function updateTimeUI(){
+  meterFill.style.width = `${Math.max(0, Math.min(1, tapePos/TAPE_LENGTH))*100}%`;
+  document.getElementById('tapeTime').textContent = `${formatTime(Math.floor(tapePos))} / ${formatTime(TAPE_LENGTH)}`;
+  tsEl.textContent = `${formatTime(Math.floor(tapePos))}`;
+  // update small status hints
+}
+
+/* ---------------------------
+   Audio: WebAudio ambient
+   --------------------------- */
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+let humOsc1, humOsc2, masterGain, noiseGain, noiseNode;
+function startAudio(){
+  if(audioCtx) return;
+  audioCtx = new AudioCtx();
+  masterGain = audioCtx.createGain(); masterGain.gain.value = 0.7; masterGain.connect(audioCtx.destination);
+
+  // two oscillators for hum (subtle detune)
+  humOsc1 = audioCtx.createOscillator(); humOsc1.type='sine'; humOsc1.frequency.value = 58.5;
+  humOsc2 = audioCtx.createOscillator(); humOsc2.type='sine'; humOsc2.frequency.value = 61.5;
+  const humGain = audioCtx.createGain(); humGain.gain.value = 0.02;
+  humOsc1.connect(humGain); humOsc2.connect(humGain); humGain.connect(masterGain);
+  humOsc1.start(); humOsc2.start();
+
+  // noise source buffer
+  const bufferSize = 2 * audioCtx.sampleRate;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<bufferSize;i++) data[i] = Math.random()*2-1;
+  noiseNode = audioCtx.createBufferSource(); noiseNode.buffer = buffer; noiseNode.loop = true;
+  noiseGain = audioCtx.createGain(); noiseGain.gain.value = 0.02;
+  const noiseFilter = audioCtx.createBiquadFilter(); noiseFilter.type='bandpass'; noiseFilter.frequency.value=1200;
+  noiseNode.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(masterGain);
+  noiseNode.start();
+
+  // small tape squeal source (created on demand)
+}
+
+function setNoise(v){
+  if(noiseGain) noiseGain.gain.linearRampToValueAtTime(v, audioCtx.currentTime + 0.05);
+}
+
+/* Whisper effect */
+function playWhisper(){
+  if(!audioCtx) startAudio();
+  const t = audioCtx.currentTime;
+  const len = 0.5 + Math.random()*0.8;
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * len, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++){
+    d[i] = (Math.random()*2-1) * Math.exp(-i/(audioCtx.sampleRate*0.12)) * (Math.random()*0.8 + 0.2);
+  }
+  const src = audioCtx.createBufferSource(); src.buffer = buf; src.loop = false;
+  const filt = audioCtx.createBiquadFilter(); filt.type='bandpass'; filt.frequency.value = 800 + Math.random()*900;
+  const g = audioCtx.createGain(); g.gain.value = 0.6 * (Math.random()*0.8+0.2);
+  src.connect(filt); filt.connect(g); g.connect(masterGain);
+  src.start();
+}
+
+/* jumpscare boom */
+function jumpscareBoom(){
+  if(!audioCtx) startAudio();
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type='sawtooth';
+  o.frequency.setValueAtTime(90, audioCtx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(2200, audioCtx.currentTime + 0.12);
+  g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.7, audioCtx.currentTime + 0.06);
+  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.9);
+  o.connect(g); g.connect(masterGain);
+  o.start();
+  o.stop(audioCtx.currentTime + 1.2);
+}
+
+/* ---------------------------
+   Visuals: draw main scene & CRT post FX
+   --------------------------- */
+let frame = 0;
+function drawScene(now){
+  const W = main.width, H = main.height;
+  // base background gradient (room)
+  const g = ctx.createLinearGradient(0,0,W,H);
+  const v = 0.06 * Math.sin(now*0.7) + 0.5;
+  g.addColorStop(0, `rgba(${8+v*6},${6+v*4},${10+v*3},1)`);
+  g.addColorStop(1, `rgba(2,2,3,1)`);
   ctx.fillStyle = g;
   ctx.fillRect(0,0,W,H);
 
-  // draw "monitor" rectangles that act like rooms/content
-  // Lobby / TV / desk boxes depend on tapeTime to be more/less noisy
-  drawBox(80, 50, 320, 420, 'LOBBY', t*0.2);
-  drawBox(430, 90, 440, 260, 'TV: CHANNEL 5', t*0.8);
-  drawBox(240, 360, 460, 180, 'DESK', t*0.15);
+  // draw three content boxes with noise / simulated screens
+  drawBox(60,40, W*0.42, H*0.68, 'LOBBY', now*0.2, 0.12);
+  drawBox(W*0.48, H*0.08, W*0.44, H*0.36, 'TV: CH-05', now*0.9, 0.22);
+  drawBox(W*0.22, H*0.62, W*0.56, H*0.28, 'DESK', now*0.1, 0.08);
 
-  // overlay subtle film grain
-  filmGrain(ctx, W, H, t);
-
-  // small scanline shift to emulate vertical wobble
+  // occasional subtle objects (poster)
   ctx.save();
-  const wobble = Math.sin(t*0.7)*4;
+  ctx.fillStyle = 'rgba(200,200,200,0.03)';
+  roundRect(ctx, W*0.78, H*0.54, W*0.12, H*0.2, 6, true, false);
+  ctx.restore();
+
+  // film grain
+  filmGrain(ctx, W, H, now);
+
+  // slight border & scan wobble
+  const wobble = Math.sin(now * 0.9) * 3;
+  ctx.save();
   ctx.translate(wobble, 0);
-  // border
   ctx.strokeStyle = 'rgba(0,0,0,0.5)';
   ctx.lineWidth = 6;
   ctx.strokeRect(2,2,W-4,H-4);
   ctx.restore();
 }
 
-// draw a content box with procedural TV-like noise
-function drawBox(x,y,w,h,label,seed){
-  // box background
+/* small noisy screen inside boxes (simulates tv/static/face) */
+function drawBox(x,y,w,h,label,seed,noiseAmp){
   ctx.save();
-  // slight shading
+  const r=8;
+  // background
   const bg = ctx.createLinearGradient(x,y,x+w,y+h);
-  bg.addColorStop(0,'rgba(20,20,24,0.92)');
-  bg.addColorStop(1,'rgba(4,4,6,0.85)');
+  bg.addColorStop(0,'rgba(16,16,18,0.95)');
+  bg.addColorStop(1,'rgba(4,4,6,0.92)');
   ctx.fillStyle = bg;
-  roundRect(ctx, x, y, w, h, 6, true, false);
+  roundRect(ctx, x, y, w, h, r, true, false);
 
-  // internal "screen" area where we draw noise / image
-  const sx = x+8, sy=y+8, sw=w-16, sh=h-26;
-  const imgData = ctx.createImageData(sw, sh);
-  // generate luma noise
-  for(let i=0;i<sw*sh;i++){
-    const v = 50 + Math.floor(80 * Math.abs(Math.sin(seed*2 + i*0.0009)));
-    imgData.data[i*4+0] = v + (Math.random()*50-25);
-    imgData.data[i*4+1] = v + (Math.random()*50-25);
-    imgData.data[i*4+2] = v + (Math.random()*50-25);
-    imgData.data[i*4+3] = 255;
+  // inner "screen" region
+  const sx = x+10, sy=y+10, sw=w-20, sh=h-34;
+  const img = ctx.createImageData(Math.max(1,Math.floor(sw)), Math.max(1,Math.floor(sh)));
+  for(let i=0;i<img.data.length/4;i++){
+    // generate banded noise influenced by seed
+    const row = Math.floor(i / sw);
+    const v = 60 + Math.floor(120 * Math.abs(Math.sin(seed*2 + row*0.02 + i*0.0008)));
+    const jitter = (Math.random()*2-1) * 24 * noiseAmp;
+    img.data[i*4+0] = clamp(v + jitter + (Math.random()*20-10), 0,255);
+    img.data[i*4+1] = clamp(v + jitter + (Math.random()*20-10), 0,255);
+    img.data[i*4+2] = clamp(v + jitter + (Math.random()*40-20), 0,255);
+    img.data[i*4+3] = 255;
   }
-  // create offscreen canvas for image smoothing
   const off = document.createElement('canvas');
-  off.width = sw; off.height = sh;
-  off.getContext('2d').putImageData(imgData, 0, 0);
+  off.width = Math.max(1,Math.floor(sw)); off.height = Math.max(1,Math.floor(sh));
+  off.getContext('2d').putImageData(img,0,0);
 
-  // occasionally overlay a "face" or text on the tv box when tapeTime in certain range
-  ctx.globalAlpha = 0.9;
-  ctx.drawImage(off, sx, sy);
-  if(Math.random() < 0.002) ctx.globalAlpha = 0.06; // occasional flicker
+  // sometimes overlay faint face shape
+  if(Math.random() < 0.003 && Math.random() < 0.5){
+    ctx.globalAlpha = 0.08;
+    ctx.drawImage(off, sx, sy);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.beginPath();
+    ctx.ellipse(sx + sw*0.5 + (Math.random()*40-20), sy + sh*0.4, sw*0.4, sh*0.55, 0, 0, Math.PI*2);
+    ctx.fill();
+  } else {
+    ctx.drawImage(off, sx, sy);
+  }
 
   // label
-  ctx.globalAlpha = 1;
   ctx.font = '12px monospace';
   ctx.fillStyle = '#8ff7a6';
-  ctx.fillText(label, x+10, y+h-8);
-
+  ctx.fillText(label, x+12, y+h-12);
   ctx.restore();
 }
 
+/* film grain */
 function filmGrain(ctx, W, H, t){
-  const density = 0.0017 * (1 + Math.abs(Math.sin(t*0.2)));
-  const pixels = W*H*density;
-  for(let i=0;i<Math.min(1200, Math.floor(pixels)); i++){
+  const density = 0.0012 * (1 + Math.abs(Math.sin(t*0.2)));
+  const count = Math.min(1500, Math.floor(W*H*density));
+  for(let i=0;i<count;i++){
     const x = Math.random()*W|0;
     const y = Math.random()*H|0;
-    ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.04})`;
+    ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.035})`;
     ctx.fillRect(x,y,1,1);
   }
 }
 
-/* helpers */
-function roundRect(ctx,x,y,w,h,r, fill, stroke){
+/* postfx: CRT / chromatic aberration / jitter */
+function postFX(now){
+  const W = post.width, H = post.height;
+
+  // draw main onto post canvas multiple times, offset color channels for chroma
+  // Get image data of main
+  pctx.clearRect(0,0,W,H);
+
+  // chroma offsets that oscillate
+  const dx = Math.sin(now*3.1) * 2 + (Math.random()*2-1)*0.6;
+  const dy = Math.cos(now*2.4) * 1.2 * (Math.random()*0.6+0.4);
+
+  // red channel (shift left)
+  pctx.globalCompositeOperation = 'lighter';
+  pctx.drawImage(main, -dx*0.7, -dy*0.4, W + Math.abs(dx*0.7), H + Math.abs(dy*0.4));
+  // green channel (center)
+  pctx.globalAlpha = 0.95;
+  pctx.drawImage(main, 0, 0);
+  // blue channel (shift right)
+  pctx.globalAlpha = 0.9;
+  pctx.drawImage(main, dx*0.8, dy*0.6);
+
+  // overlay thin scanline noise
+  pctx.globalAlpha = 0.06 + Math.abs(Math.sin(now*6))*0.04;
+  pctx.fillStyle = 'black';
+  for(let y=0;y<H;y+=3){
+    pctx.fillRect(0, y + (Math.random()*1.3-0.6), W, 1);
+  }
+  pctx.globalAlpha = 1;
+
+  // subtle vignette
+  const vg = pctx.createRadialGradient(W/2,H/2, W*0.1, W/2,H/2, W*0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.42)');
+  pctx.fillStyle = vg;
+  pctx.fillRect(0,0,W,H);
+
+  // occasional flicker white line
+  if(Math.random() < 0.004) {
+    pctx.fillStyle = 'rgba(255,255,255,0.06)';
+    pctx.fillRect(Math.random()*W, Math.random()*H, Math.random()*W*0.08 + 2, Math.random()*6+2);
+  }
+}
+
+/* helper clamp */
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function roundRect(ctx,x,y,w,h,r,fill,stroke){
   if (typeof r === 'undefined') r = 5;
   ctx.beginPath();
   ctx.moveTo(x+r, y);
@@ -337,259 +650,139 @@ function roundRect(ctx,x,y,w,h,r, fill, stroke){
   if(stroke) ctx.stroke();
 }
 
-/* -------------------------
-   Static / noise canvas
-   ------------------------- */
-function drawStatic(t){
-  const img = sctx.createImageData(W, H);
-  for (let i = 0; i < W * H; i++) {
-    const v = Math.random() * 255;
-    img.data[i * 4 + 0] = v;
-    img.data[i * 4 + 1] = v;
-    img.data[i * 4 + 2] = v * (Math.random()*0.6 + 0.4);
-    img.data[i * 4 + 3] = 120 + Math.random()*80 * (Math.sin(t*5)+1)/2;
-  }
-  sctx.putImageData(img, 0, 0);
+/* flash glitch overlay */
+function flashGlitch(ms=200){
+  const g = document.createElement('div');
+  g.style.position='absolute'; g.style.inset='0'; g.style.background='rgba(255,255,255,0.06)'; g.style.pointerEvents='none';
+  stageEl.appendChild(g);
+  setTimeout(()=> g.remove(), ms);
 }
 
-/* -------------------------
-   Audio: ambient hum + whisper + glitches
-   ------------------------- */
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx = null;
-let humOsc, humGain, noiseNode;
-
-function startAudio(){
-  if(audioCtx) return;
-  audioCtx = new AudioCtx();
-  humOsc = audioCtx.createOscillator();
-  humGain = audioCtx.createGain();
-  humOsc.type = 'sine';
-  humOsc.frequency.value = 60; // low hum
-  humGain.gain.value = 0.02;
-  humOsc.connect(humGain);
-  humGain.connect(audioCtx.destination);
-
-  // white noise node
-  const bufferSize = 2 * audioCtx.sampleRate;
-  const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-  const output = noiseBuffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
-  noiseNode = audioCtx.createBufferSource();
-  noiseNode.buffer = noiseBuffer;
-  noiseNode.loop = true;
-  const noiseGain = audioCtx.createGain();
-  noiseGain.gain.value = 0.0; // start muted
-  noiseNode.connect(noiseGain);
-  noiseGain.connect(audioCtx.destination);
-  noiseNode.start(0);
-  humOsc.start();
-  window._noiseGain = noiseGain; // for manipulation
-}
-
-function setNoiseLevel(v){
-  if(window._noiseGain) window._noiseGain.gain.linearRampToValueAtTime(v, audioCtx.currentTime + 0.05);
-}
-
-function playWhisper(){
-  if(!audioCtx) startAudio();
-  const t = audioCtx.currentTime;
-  // create a short whisper using filtered noise burst
-  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate*0.5, audioCtx.sampleRate);
-  const d = buf.getChannelData(0);
-  for(let i=0;i<d.length;i++){
-    d[i] = (Math.random()*2-1) * Math.exp(-i/5000) * (Math.random()*0.6 + 0.4);
-  }
-  const src = audioCtx.createBufferSource();
-  src.buffer = buf;
-  const f = audioCtx.createBiquadFilter();
-  f.type = 'bandpass'; f.frequency.value = 900;
-  const g = audioCtx.createGain(); g.gain.value = 0.6;
-  src.connect(f); f.connect(g); g.connect(audioCtx.destination);
-  src.start();
-}
-
-/* jumpscare sound */
-function jumpscareBoom(){
-  if(!audioCtx) startAudio();
-  const o = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
-  o.type='sawtooth';
-  o.frequency.setValueAtTime(80, audioCtx.currentTime);
-  o.frequency.exponentialRampToValueAtTime(1500, audioCtx.currentTime + 0.12);
-  g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.5, audioCtx.currentTime + 0.07);
-  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
-  o.connect(g); g.connect(audioCtx.destination);
-  o.start();
-  o.stop(audioCtx.currentTime + 1.1);
-}
-
-/* -------------------------
-   Glitch visual effect
-   ------------------------- */
-let glitchTimeout = 0;
-function triggerGlitch(ms=200){
-  glitchEl.style.opacity = 1;
-  glitchEl.innerHTML = '';
-  // generate several shifted stripes (procedural)
-  const frag = document.createElement('div');
-  frag.style.position='absolute'; frag.style.inset='0';
-  const strips = 6;
-  for(let i=0;i<strips;i++){
-    const s = document.createElement('div');
-    const h = Math.random()*30 + 8;
-    s.style.position='absolute';
-    s.style.left = Math.random()*6 + '%';
-    s.style.top = (i*(100/strips)) + '%';
-    s.style.width = (80 + Math.random()*30) + '%';
-    s.style.height = h+'px';
-    s.style.transform = `translateX(${(Math.random()*20-10)}px) skewX(${Math.random()*8-4}deg)`;
-    s.style.background = 'linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))';
-    frag.appendChild(s);
-  }
-  glitchEl.appendChild(frag);
-  setTimeout(()=> glitchEl.style.opacity = 0, ms);
-}
-
-/* -------------------------
-   Tape / main loop
-   ------------------------- */
-function updateMeter(){
-  const pct = Math.min(1, Math.max(0, tapeTime / tapeLength));
-  meterBar.style.width = (pct*100)+'%';
-  // time text
-  function fmt(s){ const mm = Math.floor(s/60)|0; const ss = Math.floor(s%60)|0; return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; }
-  tapeState.textContent = `${fmt(tapeTime)} / ${fmt(tapeLength)}`;
-  // timestamp fake: just show tape position as hh:mm:ss
-  timestampEl.textContent = `00:${fmt(tapeTime)}`;
-}
-
-function mainLoop(now){
-  const dt = (now - lastTick)/1000;
-  lastTick = now;
-
-  // update tape time
-  if(playing && !rewinding){
-    tapeTime += dt;
-    if(tapeTime > tapeLength) { tapeTime = tapeLength; playing = false; }
-  }
-  if(rewinding){
-    tapeTime -= dt*3; // rewind 3x speed
-    if(tapeTime <= 0){ tapeTime = 0; rewinding = false; playing = false; }
-  }
-
-  // update ambient audio noise according to play / corruption
-  if(audioCtx) setNoiseLevel(playing ? 0.03 : 0.01);
-
-  // draw visual frame
-  drawScene(now/1000);
-  drawStatic(now/1000);
-
-  // occasionally trigger small random glitches when in specific time ranges
-  for(const s of scenes){
-    if(s.t < tapeTime && tapeTime < s.t + (s.duration || 2)){
-      // render scene text when active
-      if(s.type === 'text') {
+/* ---------------------------
+   Scene/event manager executed on each tick
+   --------------------------- */
+function processScenes(){
+  for(const s of SCENES){
+    if(tapePos >= s.t && tapePos < s.t + (s.dur || 1)){
+      if(!s._handled){
+        // mark handled only for non-repeating events when appropriate
+        // For text/hint we allow showing repeatedly while in range
+      }
+      // perform immediate behaviors
+      if(s.type === 'text'){
         subEl.textContent = s.text;
+        subEl.style.opacity = 1;
+      } else if(s.type === 'hint'){
+        // hint: also add to log once when triggered
+        if(!s._logged){
+          addLog(`[HINT] ${s.text}`);
+          s._logged = true;
+        }
+      } else if(s.type === 'event'){
+        if(s.name === 'whispers' && Math.random() < 0.02) playWhisper();
+      } else if(s.type === 'prepare-jumpscare'){
+        // tense buildup
+        setNoise(0.09);
+        addLog('[SYSTEM] DATA CORRUPTION INCREASING');
+      } else if(s.type === 'jumpscare'){
+        if(!jumpscareDone && tapePos >= s.t){
+          doJumpscare();
+          jumpscareDone = true;
+        }
       }
-      if(s.type === 'jumpscare' && tapeTime > s.t && tapeTime < s.t + 0.5) {
-        // immediate jump
-        doJumpscare();
-      }
-      if(s.type === 'event' && s.name === 'whisper' && Math.random() < 0.02){
-        playWhisper();
+    } else {
+      // fade out text when outside
+      if(s.type === 'text' && tapePos > s.t + (s.dur || 1)*1.2) {
+        if(subEl.textContent === s.text) subEl.style.opacity = 0;
       }
     }
   }
-
-  // faint automatic glitch if near end
-  if(tapeTime > tapeLength - 20 && Math.random() < 0.02) triggerGlitch(190);
-
-  updateMeter();
-  requestAnimationFrame(mainLoop);
 }
 
-/* -------------------------
-   Jumpscare implementation
-   ------------------------- */
-let jumpscarePlayed = false;
+/* do jumpscare visuals + audio */
 function doJumpscare(){
-  if(jumpscarePlayed) return;
-  jumpscarePlayed = true;
-  // visuals: full screen white flash, large corrupted face (svg-ish)
+  // large white flash + image distortion
   const flash = document.createElement('div');
   flash.style.position='absolute'; flash.style.inset='0'; flash.style.background='white'; flash.style.opacity='0';
   flash.style.pointerEvents='none';
-  document.getElementById('screen').appendChild(flash);
-  flash.style.transition = 'opacity .06s linear';
+  stageEl.appendChild(flash);
   setTimeout(()=> flash.style.opacity = '1', 10);
-  setTimeout(()=> flash.style.opacity = '0', 100);
-  setTimeout(()=> flash.remove(), 500);
+  setTimeout(()=> flash.style.opacity = '0', 120);
+  setTimeout(()=> flash.remove(), 700);
 
-  // overlay a monstrous face inside glitchEl
-  glitchEl.innerHTML = '';
-  const face = document.createElement('div');
-  face.style.position='absolute'; face.style.inset='35% 25% 35% 25%'; face.style.background='radial-gradient(circle at 40% 40%, rgba(255,255,255,0.95), rgba(200,200,200,0.05))';
-  face.style.filter = 'contrast(180%) saturate(10%) blur(2px)';
-  face.style.transform = 'scale(1.3)';
-  glitchEl.appendChild(face);
-  glitchEl.style.opacity = 1;
-  triggerGlitch(700);
+  // heavy glitch: overlay multiple white bands
+  for(let i=0;i<6;i++){
+    setTimeout(()=> flashGlitch(120 + Math.random()*200), i*60);
+  }
+  // audio boom
   jumpscareBoom();
-
-  // aftershock: distort screen heavily then show "END"
-  setTimeout(()=>{
-    subEl.textContent = '[DATA CORRUPTION — TAPE TERMINATED]';
-    subEl.style.opacity = 1;
-  }, 900);
+  addLog('[EVENT] JUMPSCARE — TAPE CORRUPTED');
+  subEl.textContent = '[DATA CORRUPTION — TAPE TERMINATED]';
+  subEl.style.opacity = 1;
+  // stop playback soon
+  setTimeout(()=> { playing = false; statusEl.textContent='STOPPED'; }, 800);
 }
 
-/* -------------------------
-   Controls
-   ------------------------- */
-playBtn.addEventListener('click', ()=>{
-  if(!audioCtx) startAudio();
-  playing = true; rewinding = false;
-});
-pauseBtn.addEventListener('click', ()=>{ playing = false; rewinding = false; });
-rewBtn.addEventListener('mousedown', ()=>{ rewinding = true; playing = false; });
-rewBtn.addEventListener('mouseup', ()=>{ rewinding = false; });
+/* ---------------------------
+   Main loop
+   --------------------------- */
+function tick(now){
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
 
-/* also support keyboard: Space play/pause, R hold to rewind */
-window.addEventListener('keydown', (e)=>{
-  if(e.code === 'Space'){ e.preventDefault(); playing = !playing; rewinding = false; }
-  if(e.key.toLowerCase() === 'r'){ rewinding = true; playing = false; }
-});
-window.addEventListener('keyup', (e)=>{
-  if(e.key.toLowerCase() === 'r'){ rewinding = false; }
-});
+  // tape advance / rewind / fastforward behavior
+  if(playing && !rew && !fwd) tapePos += dt;
+  if(rew) tapePos -= dt*3; // rewind 3x
+  if(fwd) tapePos += dt*3;  // fwd 3x
+  tapePos = clamp(tapePos, 0, TAPE_LENGTH);
 
-/* -------------------------
-   Start audio + loop
-   ------------------------- */
-startAudio();
-lastTick = performance.now();
-requestAnimationFrame(mainLoop);
+  // audio noise control
+  if(audioCtx) {
+    setNoise(playing ? 0.035 : 0.008);
+  }
 
-/* small helper function: occasional whisper scheduled randomly */
-function scheduleRandomWhispers(){
-  setInterval(()=>{
-    if(playing && Math.random() < 0.08) playWhisper();
-  }, 4000);
-}
-scheduleRandomWhispers();
+  // render visuals
+  drawScene(now/1000);
+  postFX(now/1000);
 
-/* small debug: show hotspot outlines if debugHotspots true */
-if(debugHotspots){
-  document.querySelectorAll('.hotspot').forEach(h=>h.classList.add('debug'));
+  // scene events
+  processScenes();
+
+  // update UI
+  updateTimeUI();
+
+  requestAnimationFrame(tick);
 }
 
-/* Accessibility: focus outlines for keyboard users */
-document.querySelectorAll('button').forEach(b=>{
-  b.addEventListener('focus', ()=> b.style.outline='2px solid rgba(160,255,170,0.12)');
-  b.addEventListener('blur', ()=> b.style.outline='none');
+/* ---------------------------
+   Init
+   --------------------------- */
+loadState();
+lastTime = performance.now();
+requestAnimationFrame(tick);
+startAudio(); // start audio so user gets hum (requires gesture on some browsers)
+
+/* show small startup logs */
+addLog('[TAPE LOADED — TAPE 01]');
+addLog('Press SPACE to play/pause. R to rewind. F to fast-forward.');
+renderLog();
+
+/* ---------------------------
+   Small polishing timers / random whispers
+   --------------------------- */
+setInterval(()=>{
+  if(playing && Math.random() < 0.06) playWhisper();
+}, 3500);
+
+/* helper: ensure audio context unlock on user gesture */
+document.addEventListener('click', function once(){
+  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  document.removeEventListener('click', once);
 });
+
+/* Utility functions for later tweaks */
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
 </script>
 </body>
 </html>
